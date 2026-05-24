@@ -24,3 +24,9 @@ Raspberry Pi rain gauge node using a tipping bucket rain sensor.
 ```bash
 python3 rain_test.py
 ```
+## systemd Service (Auto Start)
+
+The rain-node runs as a background service using systemd.
+
+Service file location:
+/etc/systemd/system/rain-node.service
