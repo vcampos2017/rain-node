@@ -74,13 +74,16 @@ def get_latest():
 
             last = lines[-1].strip().split(",")
 
+            tip_count = int(last[1])
             rain_mm = float(last[2])
             rate = float(last[4])
 
-            return rain_mm, rate
+            return tip_count, rain_mm, rate
     except:
         return None
 
+
+LAST_TIP_COUNT = None
 
 while True:
     line1 = "No data"
@@ -89,18 +92,24 @@ while True:
     data = get_latest()
 
     if data:
-        rain_mm, rate = data
+        tip_count, rain_mm, rate = data
         now = time.time()
 
-        # Detect rain activity
-        if rate > 0:
+        # First run initializes the baseline without starting a session
+        if LAST_TIP_COUNT is None:
+            LAST_TIP_COUNT = tip_count
+
+        # A new bucket tip means rain activity
+        elif tip_count > LAST_TIP_COUNT:
             SESSION_LAST_RAIN_TIME = now
 
             if not SESSION_ACTIVE:
                 SESSION_ACTIVE = True
                 SESSION_START_MM = rain_mm
 
-        # Detect rain stop
+            LAST_TIP_COUNT = tip_count
+
+        # End the session after no new tips for the timeout period
         elif SESSION_ACTIVE and (now - SESSION_LAST_RAIN_TIME > SESSION_TIMEOUT):
             SESSION_ACTIVE = False
 
