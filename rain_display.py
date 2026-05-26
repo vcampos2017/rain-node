@@ -83,6 +83,9 @@ def get_latest():
 
 
 while True:
+    line1 = "No data"
+    line2 = "Waiting..."
+
     data = get_latest()
 
     if data:
@@ -108,10 +111,6 @@ while True:
         else:
             line1 = f"Rain {rain_mm:.2f} mm"
             line2 = "No Rain"
-
-    else:
-        line1 = "No data"
-        line2 = "Waiting..."
 
     lcd_message(line1, LCD_LINE_1)
     lcd_message(line2, LCD_LINE_2)
