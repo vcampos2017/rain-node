@@ -1,5 +1,9 @@
+import csv
+import socket
 import time
 from smbus import SMBus
+
+import sd_notify
 
 SESSION_ACTIVE = False
 SESSION_START_MM = 0
@@ -17,6 +21,10 @@ LCD_LINE_2 = 0xC0
 
 ENABLE = 0b00000100
 BACKLIGHT = 0b00001000
+
+SCREEN_SECONDS = 5
+BOOT_IP_SECONDS = 10
+IP_EVERY_N_SCREENS = 3  # show hostname/IP every 3rd screen
 
 
 bus = SMBus(1)
@@ -59,33 +67,79 @@ def lcd_message(message, line):
         lcd_byte(ord(char), LCD_CHR)
 
 
-import csv
+def lcd_show(line1, line2):
+    # A loose wire or I2C noise raises OSError; re-init and retry once
+    # instead of letting the whole display service die.
+    for attempt in range(2):
+        try:
+            lcd_message(line1, LCD_LINE_1)
+            lcd_message(line2, LCD_LINE_2)
+            return
+        except OSError as e:
+            print(f"LCD write failed ({e}), re-initialising")
+            time.sleep(0.5)
+            try:
+                lcd_init()
+            except OSError:
+                pass
+
+
+def get_ip():
+    # Connecting a UDP socket sends nothing; it just makes the OS pick
+    # the interface/address used for the default route.
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except OSError:
+        return "No network"
+
+
+def network_screen():
+    return socket.gethostname()[:LCD_WIDTH], get_ip()
+
 
 LOG_FILE = "logs/rain_log.csv"
 
-lcd_init()
 
 def get_latest():
     try:
-        with open(LOG_FILE) as f:
-            lines = f.readlines()
-            if len(lines) < 2:
+        with open(LOG_FILE, newline="") as f:
+            rows = list(csv.DictReader(f))
+            if not rows:
                 return None
 
-            last = lines[-1].strip().split(",")
+            last = rows[-1]
 
-            tip_count = int(last[1])
-            rain_mm = float(last[2])
-            rate = float(last[4])
+            tip_count = int(last["tip_count"])
+            rain_mm = float(last["rain_mm"])
+            rate = float(last["rate_mm_hr"])
 
             return tip_count, rain_mm, rate
-    except:
+    except (OSError, ValueError, KeyError) as e:
+        print(f"Could not read {LOG_FILE}: {e}")
         return None
 
 
+try:
+    lcd_init()
+except OSError as e:
+    print(f"LCD init failed ({e}), will retry on first write")
+
+sd_notify.ready()
+
+# Show the address right away so it's easy to SSH in after boot
+host, ip = network_screen()
+lcd_show(host, ip)
+sd_notify.watchdog(min_interval=0)
+time.sleep(BOOT_IP_SECONDS)
+
 LAST_TIP_COUNT = None
+screen = 0
 
 while True:
+    sd_notify.watchdog(min_interval=0)
+
     line1 = "No data"
     line2 = "Waiting..."
 
@@ -95,8 +149,9 @@ while True:
         tip_count, rain_mm, rate = data
         now = time.time()
 
-        # First run initializes the baseline without starting a session
-        if LAST_TIP_COUNT is None:
+        # First run, or the log was reset, initializes the baseline
+        # without starting a session
+        if LAST_TIP_COUNT is None or tip_count < LAST_TIP_COUNT:
             LAST_TIP_COUNT = tip_count
 
         # A new bucket tip means rain activity
@@ -121,7 +176,10 @@ while True:
             line1 = f"Rain {rain_mm:.2f} mm"
             line2 = "No Rain"
 
-    lcd_message(line1, LCD_LINE_1)
-    lcd_message(line2, LCD_LINE_2)
+    screen += 1
+    if screen % IP_EVERY_N_SCREENS == 0:
+        line1, line2 = network_screen()
 
-    time.sleep(5)
+    lcd_show(line1, line2)
+
+    time.sleep(SCREEN_SECONDS)

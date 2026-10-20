@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 import RPi.GPIO as GPIO
 
+import sd_notify
+
 RAIN_PIN = 18
 
 MM_PER_TIP = 0.2794
@@ -17,7 +19,6 @@ CSV_PATH = os.path.join(LOG_DIR, "rain_log.csv")
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(RAIN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-tip_count = 0
 start_time = time.time()
 
 
@@ -48,14 +49,34 @@ def log_tip(timestamp_utc, tip_count, rain_mm, rain_in, rate_mm_hr):
         ])
 
 
+def last_tip_count():
+    # Resume from the last logged tip so totals survive a restart
+    try:
+        with open(CSV_PATH, newline="") as file:
+            rows = list(csv.DictReader(file))
+            if rows:
+                return int(rows[-1]["tip_count"])
+    except (OSError, ValueError, KeyError):
+        pass
+    return 0
+
+
 ensure_csv()
+
+tip_count = last_tip_count()
+start_tip_count = tip_count
 
 print("Rain gauge test started...")
 print(f"Using GPIO{RAIN_PIN}; {MM_PER_TIP} mm per tip")
 print(f"Logging to {CSV_PATH}")
+print(f"Resuming at tip #{tip_count}")
+
+sd_notify.ready()
 
 try:
     while True:
+        sd_notify.watchdog()
+
         if GPIO.input(RAIN_PIN) == 0:
             tip_count += 1
 
@@ -63,7 +84,8 @@ try:
             rain_in = rain_mm * IN_PER_MM
 
             elapsed_hours = (time.time() - start_time) / 3600
-            rate_mm_hr = rain_mm / elapsed_hours if elapsed_hours > 0 else 0
+            run_mm = (tip_count - start_tip_count) * MM_PER_TIP
+            rate_mm_hr = run_mm / elapsed_hours if elapsed_hours > 0 else 0
 
             timestamp_utc = datetime.now(timezone.utc).isoformat()
 
@@ -78,6 +100,7 @@ try:
             time.sleep(REST_SECONDS)
 
             while GPIO.input(RAIN_PIN) == 0:
+                sd_notify.watchdog()
                 time.sleep(0.01)
 
         time.sleep(0.01)

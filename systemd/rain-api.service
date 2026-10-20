@@ -1,0 +1,15 @@
+[Unit]
+Description=Rain node HTTP API
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=/usr/bin/python3 -u @DIR@/api.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
