@@ -17,7 +17,13 @@ Raspberry Pi rain gauge node using a tipping bucket rain sensor.
 
 ## Current script
 
-`rain_test.py` counts bucket tips and prints tip count, rainfall, and estimated rain rate.
+`rain_test.py` counts bucket tips and prints tip count, rainfall, and rain rate.
+Rain rate is the rain in the last 15 minutes, scaled to mm/hr.
+
+`rain_common.py` holds the shared settings (log path, GPIO pin,
+calibration) used by `rain_test.py`, `rain_display.py` and `api.py`.
+The log is always `logs/rain_log.csv` next to the scripts, whichever
+folder they are started from.
 
 ## Run
 

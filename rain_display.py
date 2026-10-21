@@ -1,9 +1,9 @@
-import csv
 import socket
 import time
 from smbus import SMBus
 
 import sd_notify
+from rain_common import CSV_PATH, read_rows
 
 SESSION_ACTIVE = False
 SESSION_START_MM = 0
@@ -99,26 +99,19 @@ def network_screen():
     return socket.gethostname()[:LCD_WIDTH], get_ip()
 
 
-LOG_FILE = "logs/rain_log.csv"
-
-
 def get_latest():
+    # read_rows skips damaged lines, so one bad row can't blank the screen
     try:
-        with open(LOG_FILE, newline="") as f:
-            rows = list(csv.DictReader(f))
-            if not rows:
-                return None
-
-            last = rows[-1]
-
-            tip_count = int(last["tip_count"])
-            rain_mm = float(last["rain_mm"])
-            rate = float(last["rate_mm_hr"])
-
-            return tip_count, rain_mm, rate
-    except (OSError, ValueError, KeyError) as e:
-        print(f"Could not read {LOG_FILE}: {e}")
+        rows = read_rows()
+    except OSError as e:
+        print(f"Could not read {CSV_PATH}: {e}")
         return None
+
+    if not rows:
+        return None
+
+    last = rows[-1]
+    return last["tip_count"], last["rain_mm"], last["rate_mm_hr"]
 
 
 try:

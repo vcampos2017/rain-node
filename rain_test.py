@@ -1,43 +1,48 @@
 import csv
-import os
 import time
-from datetime import datetime, timezone
+from collections import deque
+from datetime import datetime, timedelta, timezone
 
 import RPi.GPIO as GPIO
 
 import sd_notify
+from rain_common import (
+    CSV_FIELDS,
+    CSV_PATH,
+    IN_PER_MM,
+    LOG_DIR,
+    MM_PER_TIP,
+    RAIN_PIN,
+    RATE_WINDOW_MINUTES,
+    rate_mm_hr,
+    read_rows,
+)
 
-RAIN_PIN = 18
-
-MM_PER_TIP = 0.2794
-IN_PER_MM = 0.0393701
 REST_SECONDS = 0.75
-
-LOG_DIR = "logs"
-CSV_PATH = os.path.join(LOG_DIR, "rain_log.csv")
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(RAIN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-start_time = time.time()
-
 
 def ensure_csv():
-    os.makedirs(LOG_DIR, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not os.path.exists(CSV_PATH):
+    if not CSV_PATH.exists():
         with open(CSV_PATH, "w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "timestamp_utc",
-                "tip_count",
-                "rain_mm",
-                "rain_in",
-                "rate_mm_hr",
-            ])
+            csv.writer(file).writerow(CSV_FIELDS)
+        return
+
+    # If a power cut left a half-written last line, end it so the next
+    # entry starts on its own line (read_rows skips the broken one).
+    with open(CSV_PATH, "rb+") as file:
+        file.seek(0, 2)
+        if file.tell() > 0:
+            file.seek(-1, 2)
+            if file.read(1) != b"\n":
+                file.write(b"\n")
 
 
-def log_tip(timestamp_utc, tip_count, rain_mm, rain_in, rate_mm_hr):
+def log_tip(timestamp_utc, tip_count, rain_mm, rain_in, rate):
     with open(CSV_PATH, "a", newline="") as file:
         writer = csv.writer(file)
         writer.writerow([
@@ -45,28 +50,29 @@ def log_tip(timestamp_utc, tip_count, rain_mm, rain_in, rate_mm_hr):
             tip_count,
             f"{rain_mm:.4f}",
             f"{rain_in:.4f}",
-            f"{rate_mm_hr:.2f}",
+            f"{rate:.2f}",
         ])
 
 
-def last_tip_count():
-    # Resume from the last logged tip so totals survive a restart
-    try:
-        with open(CSV_PATH, newline="") as file:
-            rows = list(csv.DictReader(file))
-            if rows:
-                return int(rows[-1]["tip_count"])
-    except (OSError, ValueError, KeyError):
-        pass
-    return 0
+def load_previous_state():
+    """Resume from the last good log row so totals survive a restart.
+
+    Bad rows (e.g. half-written after a power cut) are skipped, so the
+    count picks up from the last good row instead of falling back to 0.
+    """
+    rows = read_rows()
+    if not rows:
+        return 0, deque()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=RATE_WINDOW_MINUTES)
+    recent_tips = deque(r["time"] for r in rows if r["time"] >= cutoff)
+    return rows[-1]["tip_count"], recent_tips
 
 
 ensure_csv()
+tip_count, recent_tips = load_previous_state()
 
-tip_count = last_tip_count()
-start_tip_count = tip_count
-
-print("Rain gauge test started...")
+print("Rain gauge logger started...")
 print(f"Using GPIO{RAIN_PIN}; {MM_PER_TIP} mm per tip")
 print(f"Logging to {CSV_PATH}")
 print(f"Resuming at tip #{tip_count}")
@@ -79,22 +85,24 @@ try:
 
         if GPIO.input(RAIN_PIN) == 0:
             tip_count += 1
+            now = datetime.now(timezone.utc)
+
+            # Rate = rain in the last RATE_WINDOW_MINUTES, in mm/hr
+            recent_tips.append(now)
+            cutoff = now - timedelta(minutes=RATE_WINDOW_MINUTES)
+            while recent_tips and recent_tips[0] < cutoff:
+                recent_tips.popleft()
 
             rain_mm = tip_count * MM_PER_TIP
             rain_in = rain_mm * IN_PER_MM
+            rate = rate_mm_hr(recent_tips, now)
 
-            elapsed_hours = (time.time() - start_time) / 3600
-            run_mm = (tip_count - start_tip_count) * MM_PER_TIP
-            rate_mm_hr = run_mm / elapsed_hours if elapsed_hours > 0 else 0
-
-            timestamp_utc = datetime.now(timezone.utc).isoformat()
-
-            log_tip(timestamp_utc, tip_count, rain_mm, rain_in, rate_mm_hr)
+            log_tip(now.isoformat(), tip_count, rain_mm, rain_in, rate)
 
             print(
                 f"TIP #{tip_count} | "
                 f"Rainfall: {rain_mm:.2f} mm / {rain_in:.3f} in | "
-                f"Rate: {rate_mm_hr:.2f} mm/hr"
+                f"Rate: {rate:.2f} mm/hr"
             )
 
             time.sleep(REST_SECONDS)
@@ -106,5 +114,5 @@ try:
         time.sleep(0.01)
 
 except KeyboardInterrupt:
-    print("\nStopping rain gauge test.")
+    print("\nStopping rain gauge logger.")
     GPIO.cleanup()
