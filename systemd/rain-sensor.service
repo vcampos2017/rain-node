@@ -1,0 +1,18 @@
+[Unit]
+Description=Rain node tipping bucket counter
+After=local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=/usr/bin/python3 -u @DIR@/rain_test.py
+# Restart on crash; WATCHDOG restarts it if the loop stops pinging (hang)
+Restart=always
+RestartSec=5
+WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target
