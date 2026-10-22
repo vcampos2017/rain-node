@@ -36,6 +36,22 @@ python3 rain_test.py
 the hostname and IP address for 10 seconds at boot, then every 3rd screen, so
 you can find the node on the network without a monitor.
 
+## Status at SSH login
+
+`rain_status.py` prints a short summary in the terminal: total, today, last
+24 h, current rate, time of the last tip, and whether the three services are
+running.
+
+```bash
+python3 ~/rain-node/rain_status.py
+```
+
+To show it every time you log in over SSH, run this once:
+
+```bash
+echo '[ -n "$SSH_CONNECTION" ] && python3 ~/rain-node/rain_status.py' >> ~/.bashrc
+```
+
 ## Services, auto-restart and crash recovery
 
 Install everything as systemd services:
