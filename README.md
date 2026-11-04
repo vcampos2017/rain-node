@@ -52,6 +52,20 @@ To show it every time you log in over SSH, run this once:
 echo '[ -n "$SSH_CONNECTION" ] && python3 ~/rain-node/rain_status.py' >> ~/.bashrc
 ```
 
+## Checking in with Chatty (node network)
+
+`rain_mqtt.py` (service `rain-mqtt`) posts a heartbeat every minute and the
+latest rain numbers whenever the bucket tips, to Chatty's MQTT broker:
+
+- `chatty/nodes/rain/status`: `{"state": "online", "every": 60, ...}`
+- `chatty/nodes/rain/data`: `rain_in`, `rain_mm`, `rate_mm_hr`, `tip_count`
+
+If the node drops off WiFi or loses power, the broker posts
+`{"state": "offline"}` for it and Chatty shows "Rain node went quiet".
+
+The broker address defaults to `chatty-node.local`. To change it, put
+`MQTT_HOST=...` in `/etc/rain-node.env` and run `sudo systemctl restart rain-mqtt`.
+
 ## Services, auto-restart and crash recovery
 
 Install everything as systemd services:
@@ -67,6 +81,7 @@ This installs and starts three services, running as the user who ran `sudo`:
 | `rain-sensor` | `rain_test.py` (counts tips, writes `logs/rain_log.csv`) |
 | `rain-display` | `rain_display.py` (LCD) |
 | `rain-api` | `api.py` (HTTP `/status` on port 5000) |
+| `rain-mqtt` | `rain_mqtt.py` (heartbeat and readings to Chatty over MQTT) |
 
 Recovery layers:
 
@@ -84,7 +99,7 @@ disables it so two copies don't run at once.
 Useful commands:
 
 ```bash
-systemctl status rain-sensor rain-display rain-api
+systemctl status rain-sensor rain-display rain-api rain-mqtt
 journalctl -u rain-display -f
 sudo systemctl restart rain-display
 ```

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from rain_common import IN_PER_MM, MM_PER_TIP, RATE_WINDOW_MINUTES, rate_mm_hr, read_rows
 
-SERVICES = ["rain-sensor", "rain-display", "rain-api"]
+SERVICES = ["rain-sensor", "rain-display", "rain-api", "rain-mqtt"]
 
 COLOR = sys.stdout.isatty()
 

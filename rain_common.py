@@ -58,3 +58,24 @@ def rate_mm_hr(tip_times, now=None):
     cutoff = now - timedelta(minutes=RATE_WINDOW_MINUTES)
     recent = sum(1 for t in tip_times if t >= cutoff)
     return recent * MM_PER_TIP * (60 / RATE_WINDOW_MINUTES)
+
+
+def latest(rows=None):
+    """The newest reading as a dict (empty if nothing is logged yet).
+
+    Used by api.py (/status) and rain_mqtt.py, so the web page and the
+    node network always report the same numbers.
+    """
+    rows = read_rows() if rows is None else rows
+    if not rows:
+        return {}
+    row = rows[-1]
+    return {
+        "timestamp_utc": row["timestamp_utc"],
+        "tip_count": row["tip_count"],
+        "rain_mm": row["rain_mm"],
+        "rain_in": row["rain_in"],
+        # Worked out from recent tips at request time, so it drops back
+        # to 0 once the rain stops instead of repeating the last value.
+        "rate_mm_hr": round(rate_mm_hr(r["time"] for r in rows), 2),
+    }
