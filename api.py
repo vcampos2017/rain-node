@@ -1,26 +1,12 @@
 from flask import Flask, jsonify
 
-from rain_common import rate_mm_hr, read_rows
+from rain_common import latest
 
 app = Flask(__name__)
 
 
 def get_latest():
-    rows = read_rows()
-    if not rows:
-        return {}
-
-    row = rows[-1]
-
-    return {
-        "timestamp_utc": row["timestamp_utc"],
-        "tip_count": row["tip_count"],
-        "rain_mm": row["rain_mm"],
-        "rain_in": row["rain_in"],
-        # Worked out from recent tips at request time, so it drops back
-        # to 0 once the rain stops instead of repeating the last value.
-        "rate_mm_hr": round(rate_mm_hr(r["time"] for r in rows), 2),
-    }
+    return latest()
 
 
 @app.route("/status")

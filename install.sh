@@ -10,7 +10,12 @@ fi
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 RUN_USER="${SUDO_USER:-pi}"
-UNITS="rain-sensor rain-display rain-api"
+UNITS="rain-sensor rain-display rain-api rain-mqtt"
+
+# rain-mqtt.py needs the MQTT library to check in with Chatty
+if ! python3 -c "import paho.mqtt.client" 2>/dev/null; then
+    apt-get install -y python3-paho-mqtt || { apt-get update && apt-get install -y python3-paho-mqtt; }
+fi
 
 mkdir -p "$DIR/logs"
 chown "$RUN_USER": "$DIR/logs"
