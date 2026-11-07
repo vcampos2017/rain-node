@@ -93,6 +93,15 @@ Recovery layers:
 - **Wi-Fi dropouts:** Wi-Fi power saving is turned off (`wifi-powersave-off.service`).
 - **Restarts keep totals:** `rain_test.py` resumes the tip count from the last row of the log.
 
+- **Wrong or dead WiFi:** `wifi_keeper.py` (install once with
+  `bash install_wifi_keeper.sh`) checks for real internet every minute and
+  moves to the best saved WiFi that works. If nothing works it reconnects and
+  switches WiFi off and on, and after 30 minutes offline with the home router
+  not answering either, it restarts the Pi (at most 3 times a day; never when
+  only the internet is down), noting what it saw in
+  `/var/lib/node-wifi/restarts.log`. Never reads passwords. `sudo python3
+  wifi_keeper.py --status` lists saved networks; `journalctl -u node-wifi -f`.
+
 If an older `/etc/systemd/system/rain-node.service` exists, the installer
 disables it so two copies don't run at once.
 
