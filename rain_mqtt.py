@@ -11,10 +11,16 @@ restart, the word clock) gets the latest right away. If this Pi drops off
 WiFi or loses power, the broker posts {"state": "offline"} for it (the
 "last will"), and Chatty shows "Rain node went quiet".
 
+Finding Chatty: broker_link.py tries her home address, chatty-node.local
+and her Tailscale address, learns which WiFi she's on from her `chatty/hub`
+note, and follows her when she moves (see broker_link.py). The heartbeat says
+how it reached her ("via": "lan" or "tailscale").
+
 Settings (environment, e.g. in /etc/rain-node.env):
     MQTT_HOST   broker address (default chatty-node.local, Chatty's Pi)
     MQTT_PORT   default 1883
     NODE_NAME   default "rain"
+    MQTT_HOSTS, MQTT_TAILSCALE, MQTT_SCAN: see broker_link.py
 
 Needs: sudo apt install python3-paho-mqtt
 """
@@ -25,10 +31,10 @@ import time
 
 import paho.mqtt.client as mqtt
 
+import broker_link
 import sd_notify
 from rain_common import latest
 
-HOST = os.getenv("MQTT_HOST", "chatty-node.local")
 PORT = int(os.getenv("MQTT_PORT", "1883"))
 NAME = os.getenv("NODE_NAME", "rain")
 EVERY = 60    # heartbeat, seconds
@@ -38,9 +44,15 @@ STATUS = f"chatty/nodes/{NAME}/status"
 DATA = f"chatty/nodes/{NAME}/data"
 
 
+link = None
+
+
 def status(state="online"):
-    return json.dumps({"state": state, "every": EVERY, "ts": int(time.time()),
-                       "title": "Rain node", "host": socket.gethostname()})
+    body = {"state": state, "every": EVERY, "ts": int(time.time()),
+            "title": "Rain node", "host": socket.gethostname()}
+    if link is not None:
+        body.update(link.info())
+    return json.dumps(body)
 
 
 connected = False
@@ -49,7 +61,6 @@ connected = False
 def on_connect(client, userdata, flags, *rest):
     global connected
     connected = True
-    print(f"Connected to {HOST}:{PORT}", flush=True)
     client.publish(STATUS, status(), qos=1, retain=True)
     try:
         reading = latest()
@@ -75,14 +86,14 @@ def make_client():
     client.will_set(STATUS, json.dumps({"state": "offline"}), qos=1, retain=True)
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
-    client.reconnect_delay_set(min_delay=2, max_delay=60)
     return client
 
 
 def main():
+    global link
     client = make_client()
-    client.connect_async(HOST, PORT, keepalive=30)
-    client.loop_start()
+    link = broker_link.BrokerLink(client, port=PORT, keepalive=30)
+    link.start()
     sd_notify.ready()
     last_beat = 0.0
     last_tips = None

@@ -63,8 +63,14 @@ latest rain numbers whenever the bucket tips, to Chatty's MQTT broker:
 If the node drops off WiFi or loses power, the broker posts
 `{"state": "offline"}` for it and Chatty shows "Rain node went quiet".
 
-The broker address defaults to `chatty-node.local`. To change it, put
-`MQTT_HOST=...` in `/etc/rain-node.env` and run `sudo systemctl restart rain-mqtt`.
+The node finds Chatty's broker on whichever WiFi she is on (`broker_link.py`):
+her home address, `chatty-node.local`, then her Tailscale address
+(100.69.130.79). It learns her addresses and WiFi from her retained
+`chatty/hub` note, keeps them in `~/.local/state/chatty-hub.json`, and moves
+back to her home address once she answers there. The heartbeat says how it got
+there (`"via": "lan"` or `"tailscale"`). To change the name it tries, put
+`MQTT_HOST=...` in `/etc/rain-node.env` (or a full list, `MQTT_HOSTS=a,b,c`) and
+run `sudo systemctl restart rain-mqtt`.
 
 ## Services, auto-restart and crash recovery
 
