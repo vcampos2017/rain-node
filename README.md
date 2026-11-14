@@ -107,6 +107,11 @@ Recovery layers:
   only the internet is down), noting what it saw in
   `/var/lib/node-wifi/restarts.log`. Never reads passwords. `sudo python3
   wifi_keeper.py --status` lists saved networks; `journalctl -u node-wifi -f`.
+- **Home WiFi:** with `NODE_WIFI_HOME=GF-Home` in `/etc/node-wifi.env` it
+  prefers the network Chatty and the other nodes are on: back from another
+  network once home is usable (30%+, 3 checks, at most every 15 min), straight
+  back if home has no internet (next try after 30 min, doubling up to 4 h), and
+  home first when offline.
 
 If an older `/etc/systemd/system/rain-node.service` exists, the installer
 disables it so two copies don't run at once.
