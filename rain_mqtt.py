@@ -92,7 +92,7 @@ def make_client():
 def main():
     global link
     client = make_client()
-    link = broker_link.BrokerLink(client, port=PORT, keepalive=30)
+    link = broker_link.BrokerLink(client, port=PORT, keepalive=60)
     link.start()
     sd_notify.ready()
     last_beat = 0.0
