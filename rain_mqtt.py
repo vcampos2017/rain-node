@@ -11,6 +11,12 @@ restart, the word clock) gets the latest right away. If this Pi drops off
 WiFi or loses power, the broker posts {"state": "offline"} for it (the
 "last will"), and Chatty shows "Rain node went quiet".
 
+A planned reboot or shutdown is different: node_goodbye.py posts a proper
+goodbye first ({"state": "offline", "clean": true, "reason": "reboot", ...})
+and leaves without the last will, so Chatty waits quietly for it to come back
+instead of saying it went quiet. `python3 node_goodbye.py away 180` before a
+long power-down asks her to wait 3 hours.
+
 Finding Chatty: broker_link.py tries her home address, chatty-node.local
 and her Tailscale address, learns which WiFi she's on from her `chatty/hub`
 note, and follows her when she moves (see broker_link.py). The heartbeat says
@@ -32,6 +38,7 @@ import time
 import paho.mqtt.client as mqtt
 
 import broker_link
+import node_goodbye
 import sd_notify
 from rain_common import latest
 
@@ -89,11 +96,19 @@ def make_client():
     return client
 
 
+def goodbye(client):
+    """Shutting down or restarting properly: tell Chatty (no last will)."""
+    if link is None:
+        return False
+    return node_goodbye.leave(client, STATUS, node_goodbye.message("Rain node", EVERY), link=link)
+
+
 def main():
     global link
     client = make_client()
     link = broker_link.BrokerLink(client, port=PORT, keepalive=60)
     link.start()
+    node_goodbye.on_stop(lambda: goodbye(client))
     sd_notify.ready()
     last_beat = 0.0
     last_tips = None

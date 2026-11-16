@@ -63,6 +63,15 @@ latest rain numbers whenever the bucket tips, to Chatty's MQTT broker:
 If the node drops off WiFi or loses power, the broker posts
 `{"state": "offline"}` for it and Chatty shows "Rain node went quiet".
 
+A planned reboot or shutdown says goodbye instead (`node_goodbye.py`, the same
+file in every node's repo): a retained `{"state": "offline", "clean": true,
+"reason": "reboot", ...}` and a proper leave, so there is no last will. Chatty
+then waits quietly (10 minutes after a reboot, an hour after a power-down) and
+only says something if the node isn't back by then. Before a longer power-down,
+`python3 node_goodbye.py away 180` asks her to wait 3 hours. Once per Pi,
+`sudo python3 node_goodbye.py install rain-mqtt` makes the service stop before
+the network at shutdown, so the goodbye still gets out.
+
 The node finds Chatty's broker on whichever WiFi she is on (`broker_link.py`):
 her home address, `chatty-node.local`, then her Tailscale address
 (100.69.130.79). It learns her addresses and WiFi from her retained
