@@ -113,7 +113,8 @@ def main():
     last_beat = 0.0
     last_tips = None
     while True:
-        sd_notify.watchdog()
+        if link.alive():          # a hung link thread stops the pings: systemd restarts us
+            sd_notify.watchdog()
         now = time.monotonic()
         try:
             reading = latest()
