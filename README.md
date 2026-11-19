@@ -74,12 +74,20 @@ the network at shutdown, so the goodbye still gets out.
 
 The node finds Chatty's broker on whichever WiFi she is on (`broker_link.py`):
 her home address, `chatty-node.local`, then her Tailscale address
-(100.69.130.79). It learns her addresses and WiFi from her retained
+(`MQTT_TAILSCALE` in `/etc/rain-node.env`, or the one from her note). It learns her addresses and WiFi from her retained
 `chatty/hub` note, keeps them in `~/.local/state/chatty-hub.json`, and moves
 back to her home address once she answers there. The heartbeat says how it got
 there (`"via": "lan"` or `"tailscale"`). To change the name it tries, put
 `MQTT_HOST=...` in `/etc/rain-node.env` (or a full list, `MQTT_HOSTS=a,b,c`) and
 run `sudo systemctl restart rain-mqtt`.
+
+It never stays stuck: each "can't reach Chatty" line says why the last try
+failed, and when the problem is on this side (the program ran out of open
+files, or a brand-new program reaches her board while this one hasn't for
+15 minutes, `MQTT_RESTART_MINUTES`) it ends itself and systemd starts it fresh.
+`rain_mqtt.py` also stops feeding its systemd watchdog when the link thread
+hangs, so systemd restarts it within a few minutes. `python3 broker_link.py
+check` asks her board for a hello from a fresh program.
 
 ## Services, auto-restart and crash recovery
 
@@ -116,7 +124,7 @@ Recovery layers:
   only the internet is down), noting what it saw in
   `/var/lib/node-wifi/restarts.log`. Never reads passwords. `sudo python3
   wifi_keeper.py --status` lists saved networks; `journalctl -u node-wifi -f`.
-- **Home WiFi:** with `NODE_WIFI_HOME=GF-Home` in `/etc/node-wifi.env` it
+- **Home WiFi:** with `NODE_WIFI_HOME=HomeWiFi` in `/etc/node-wifi.env` it
   prefers the network Chatty and the other nodes are on: back from another
   network once home is usable (30%+, 3 checks, at most every 15 min), straight
   back if home has no internet (next try after 30 min, doubling up to 4 h), and
